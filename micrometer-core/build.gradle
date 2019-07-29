@@ -55,6 +55,10 @@ dependencies {
 
     compile 'com.squareup.okhttp3:okhttp:3.+', optional
 
+    compile 'org.apache.kafka:kafka-clients:2.3.0', optional
+
+    compile 'org.apache.kafka:kafka-streams:2.3.0', optional
+
     compile 'org.mongodb:mongo-java-driver:latest.release', optional
 
     testCompile 'io.projectreactor:reactor-test:latest.release'
