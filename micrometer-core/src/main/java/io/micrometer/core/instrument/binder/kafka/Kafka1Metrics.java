@@ -18,12 +18,12 @@ import io.micrometer.core.instrument.FunctionCounter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tag;
+import io.micrometer.core.instrument.TimeGauge;
 import io.micrometer.core.instrument.binder.MeterBinder;
 import io.micrometer.core.lang.NonNullApi;
 import io.micrometer.core.lang.NonNullFields;
-import java.util.Arrays;
-import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -40,21 +40,16 @@ import static java.util.Collections.emptyList;
  * Metric names here are based on the naming scheme as it was last changed in Kafka version 0.11.0.
  * Metrics for earlier versions of Kafka will not report correctly.
  *
- * @author Wardha Perinkadakattu
- * @author Jon Schneider
- * @author Johnny Lim
+ * @author Jorge Quilcate
  * @see <a href="https://docs.confluent.io/current/kafka/monitoring.html">Kakfa monitoring
  * documentation</a>
- * @since 1.1.0
+ * @since 1.3.0
  */
-@Incubating(since = "1.1.0")
+@Incubating(since = "1.3.0")
 @NonNullApi
 @NonNullFields
 class Kafka1Metrics implements MeterBinder {
     private static final String METRIC_NAME_PREFIX = "kafka.";
-
-    private static final List<Tag> EMPTY_TAGS =
-            Arrays.asList(Tag.of("topic", ""), Tag.of("partition", ""));
 
     private final Supplier<Map<MetricName, ? extends Metric>> metricsSupplier;
 
@@ -85,10 +80,15 @@ class Kafka1Metrics implements MeterBinder {
                 if (metric instanceof KafkaMetric) {
                     KafkaMetric kafkaMetric = (KafkaMetric) metric;
 
-                    if (kafkaMetric.metricName().name().endsWith("total")) {
+                    if (kafkaMetric.metricName().name().endsWith("total")
+                            || kafkaMetric.metricName().name().endsWith("count")) {
                         registerCounter(registry, kafkaMetric, extraTags);
-                    } else {
+                    } else if (kafkaMetric.metricName().name().endsWith("min")
+                            || kafkaMetric.metricName().name().endsWith("max")
+                            || kafkaMetric.metricName().name().endsWith("avg")) {
                         registerGauge(registry, kafkaMetric, extraTags);
+                    } else if (kafkaMetric.metricName().name().endsWith("rate")) {
+                        registerTimeGauge(registry, kafkaMetric, extraTags);
                     }
                 }
             });
@@ -96,7 +96,50 @@ class Kafka1Metrics implements MeterBinder {
         }
     }
 
+    private void registerTimeGauge(MeterRegistry registry, KafkaMetric metric,
+            Iterable<Tag> extraTags) {
+        TimeGauge.builder(
+                metricName(metric), metric, TimeUnit.SECONDS, m -> {
+                    registerMetrics(registry);
+                    if (m.metricValue() instanceof Double) {
+                        return (double) m.metricValue();
+                    } else {
+                        return Double.NaN;
+                    }
+                })
+                .tags(metric.metricName().tags()
+                        .entrySet()
+                        .stream()
+                        .map(entry -> Tag.of(entry.getKey(), entry.getValue()))
+                        .collect(Collectors.toList()))
+                .tags(extraTags)
+                .description(metric.metricName().description())
+                .register(registry);
+    }
+
     private void registerGauge(MeterRegistry registry, KafkaMetric metric,
+            Iterable<Tag> extraTags) {
+        Gauge.builder(
+                metricName(metric), metric, m -> {
+                    registerMetrics(registry);
+                    if (m.metricValue() instanceof Double) {
+                        return (double) m.metricValue();
+                    } else {
+                        return Double.NaN;
+                    }
+                })
+                .tags(metric.metricName().tags()
+                        .entrySet()
+                        .stream()
+                        .map(entry -> Tag.of(entry.getKey(), entry.getValue()))
+                        .collect(Collectors.toList()))
+                .tags(extraTags)
+                .description(metric.metricName().description())
+                .register(registry);
+    }
+
+
+    private void registerCounter(MeterRegistry registry, KafkaMetric metric,
             Iterable<Tag> extraTags) {
         FunctionCounter.builder(
                 metricName(metric), metric, m -> {
@@ -107,7 +150,6 @@ class Kafka1Metrics implements MeterBinder {
                         return Double.NaN;
                     }
                 })
-                .tags(EMPTY_TAGS)
                 .tags(metric.metricName().tags()
                         .entrySet()
                         .stream()
@@ -120,27 +162,5 @@ class Kafka1Metrics implements MeterBinder {
 
     private String metricName(KafkaMetric metric) {
         return METRIC_NAME_PREFIX + metric.metricName().group() + "." + metric.metricName().name();
-    }
-
-    private void registerCounter(MeterRegistry registry, KafkaMetric metric,
-            Iterable<Tag> extraTags) {
-        Gauge.builder(
-                metricName(metric), metric, m -> {
-                    registerMetrics(registry);
-                    if (m.metricValue() instanceof Double) {
-                        return (double) m.metricValue();
-                    } else {
-                        return Double.NaN;
-                    }
-                })
-                .tags(EMPTY_TAGS)
-                .tags(metric.metricName().tags()
-                        .entrySet()
-                        .stream()
-                        .map(entry -> Tag.of(entry.getKey(), entry.getValue()))
-                        .collect(Collectors.toList()))
-                .tags(extraTags)
-                .description(metric.metricName().description())
-                .register(registry);
     }
 }

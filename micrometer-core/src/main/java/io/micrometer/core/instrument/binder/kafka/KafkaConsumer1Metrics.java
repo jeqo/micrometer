@@ -26,14 +26,12 @@ import org.apache.kafka.clients.consumer.Consumer;
  * Metric names here are based on the naming scheme as it was last changed in Kafka version 0.11.0.
  * Metrics for earlier versions of Kafka will not report correctly.
  *
- * @author Wardha Perinkadakattu
- * @author Jon Schneider
- * @author Johnny Lim
+ * @author Jorge Quilcate
  * @see <a href="https://docs.confluent.io/current/kafka/monitoring.html">Kakfa monitoring
  * documentation</a>
- * @since 1.1.0
+ * @since 1.3.0
  */
-@Incubating(since = "1.1.0")
+@Incubating(since = "1.3.0")
 @NonNullApi
 @NonNullFields
 public final class KafkaConsumer1Metrics extends Kafka1Metrics {
