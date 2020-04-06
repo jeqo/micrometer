@@ -61,6 +61,7 @@ class KafkaMetrics implements MeterBinder {
      * Keeps track of current set of metrics.
      */
     private volatile Set<MetricName> currentMeters = new HashSet<>();
+    volatile boolean reloaded = false;
 
     private String kafkaVersion = "unknown";
 
@@ -98,10 +99,12 @@ class KafkaMetrics implements MeterBinder {
      * comparing meters last returned from the Kafka client.
      */
     void checkAndBindMetrics(MeterRegistry registry) {
+        reloaded = false;
         Map<MetricName, ? extends Metric> metrics = metricsSupplier.get();
         if (!currentMeters.equals(metrics.keySet())) {
             synchronized (this) { //Enforce only happens once when metrics change
                 if (!currentMeters.equals(metrics.keySet())) {
+                    reloaded = true;
                     currentMeters = new HashSet<>(metrics.keySet());
                     metrics.forEach((name, metric) -> {
                         //Filter out non-numeric values

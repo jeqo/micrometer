@@ -48,10 +48,12 @@ class KafkaMetricsTest {
         kafkaMetrics.checkAndBindMetrics(registry);
         //Then
         assertThat(registry.getMeters()).hasSize(1);
+        assertThat(kafkaMetrics.reloaded).isTrue();
         //When
         kafkaMetrics.checkAndBindMetrics(registry);
         //Then
         assertThat(registry.getMeters()).hasSize(1);
+        assertThat(kafkaMetrics.reloaded).isFalse();
     }
 
     @Test void shouldAddNewMetersWhenMetricsChange() {
